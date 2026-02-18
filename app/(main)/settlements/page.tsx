@@ -7,12 +7,29 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { formatCurrency } from '@/lib/utils'
-import { CheckCircle2 } from 'lucide-react'
+import { formatCurrency, formatDate } from '@/lib/utils'
+import { CheckCircle2, ChevronDown, Receipt, ShoppingBag, CreditCard } from 'lucide-react'
+import Link from 'next/link'
+import { cn } from '@/lib/utils'
+
+const typeIcon = {
+  AA: Receipt,
+  ADVANCE: CreditCard,
+  GOODS: ShoppingBag,
+}
+
+interface BillDetail {
+  billId: string
+  title: string
+  type: string
+  date: string
+  amount: number
+}
 
 interface Balance {
   user: { id: string; username: string }
   netAmount: number
+  details: BillDetail[]
 }
 
 export default function SettlementsPage() {
@@ -153,20 +170,57 @@ export default function SettlementsPage() {
 }
 
 function BalanceRow({ balance, onSettle }: { balance: Balance; onSettle: () => void }) {
+  const [expanded, setExpanded] = useState(false)
   const isNegative = balance.netAmount < 0
+
   return (
-    <Card className="border-border/60">
-      <CardContent className="p-3 flex items-center gap-3">
-        <Avatar className="h-9 w-9 shrink-0">
-          <AvatarFallback className="bg-secondary text-secondary-foreground font-medium">{balance.user.username[0]}</AvatarFallback>
-        </Avatar>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{balance.user.username}</p>
-          <p className={`text-sm font-semibold ${isNegative ? 'text-rose-500' : 'text-emerald-600'}`}>
-            {isNegative ? '欠 ' : '还我 '}{formatCurrency(Math.abs(balance.netAmount))}
-          </p>
+    <Card className="border-border/60 overflow-hidden">
+      <CardContent className="p-3">
+        <div className="flex items-center gap-3">
+          <Avatar className="h-9 w-9 shrink-0">
+            <AvatarFallback className="bg-secondary text-secondary-foreground font-medium">{balance.user.username[0]}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{balance.user.username}</p>
+            <p className={`text-sm font-semibold ${isNegative ? 'text-rose-500' : 'text-emerald-600'}`}>
+              {isNegative ? '欠 ' : '还我 '}{formatCurrency(Math.abs(balance.netAmount))}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {balance.details.length > 0 && (
+              <button
+                onClick={() => setExpanded((v) => !v)}
+                className="p-1.5 rounded-lg hover:bg-muted transition-colors cursor-pointer"
+                aria-label={expanded ? '收起详情' : '展开详情'}
+              >
+                <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', expanded && 'rotate-180')} />
+              </button>
+            )}
+            <Button size="sm" variant="outline" onClick={onSettle} className="cursor-pointer">结算</Button>
+          </div>
         </div>
-        <Button size="sm" variant="outline" onClick={onSettle} className="cursor-pointer shrink-0">结算</Button>
+
+        {expanded && balance.details.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-border space-y-2">
+            {balance.details.map((d) => {
+              const Icon = typeIcon[d.type as keyof typeof typeIcon] ?? Receipt
+              return (
+                <Link
+                  key={d.billId}
+                  href={`/bills/${d.billId}`}
+                  className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted transition-colors cursor-pointer"
+                >
+                  <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="flex-1 text-xs text-foreground truncate">{d.title}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{formatDate(d.date)}</span>
+                  <span className={cn('text-xs font-semibold shrink-0', d.amount > 0 ? 'text-emerald-600' : 'text-rose-500')}>
+                    {d.amount > 0 ? '+' : ''}{formatCurrency(Math.abs(d.amount))}
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
