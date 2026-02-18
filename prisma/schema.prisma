@@ -1,14 +1,124 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client"
-  output   = "../lib/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+
+  groups          UserGroup[]
+  billsCreated    Bill[]
+  participants    BillParticipant[]
+  settlementsFrom Settlement[] @relation("FromUser")
+  settlementsTo   Settlement[] @relation("ToUser")
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  inviteCode  String   @unique @default(cuid())
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  members     UserGroup[]
+  bills       Bill[]
+  settlements Settlement[]
+}
+
+model UserGroup {
+  userId   String
+  groupId  String
+  role     Role     @default(MEMBER)
+  joinedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id])
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@id([userId, groupId])
+}
+
+enum Role {
+  OWNER
+  MEMBER
+}
+
+model Bill {
+  id          String   @id @default(cuid())
+  title       String
+  type        BillType
+  totalAmount Decimal  @db.Decimal(10, 2)
+  currency    String   @default("CNY")
+  date        DateTime
+  description String?
+  groupId     String
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group        Group             @relation(fields: [groupId], references: [id])
+  createdBy    User              @relation(fields: [createdById], references: [id])
+  participants BillParticipant[]
+  goods        GoodsItem[]
+}
+
+enum BillType {
+  AA
+  ADVANCE
+  GOODS
+}
+
+model BillParticipant {
+  id              String  @id @default(cuid())
+  billId          String
+  userId          String
+  paidAmount      Decimal @default(0) @db.Decimal(10, 2)
+  shouldPayAmount Decimal @db.Decimal(10, 2)
+
+  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([billId, userId])
+}
+
+model GoodsItem {
+  id            String    @id @default(cuid())
+  billId        String
+  name          String
+  characterName String?
+  quantity      Int       @default(1)
+  unitPrice     Decimal   @db.Decimal(10, 2)
+  purchaseDate  DateTime?
+  deliveryDate  DateTime?
+  imageUrl      String?
+
+  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+}
+
+model Settlement {
+  id         String         @id @default(cuid())
+  groupId    String
+  fromUserId String
+  toUserId   String
+  amount     Decimal        @db.Decimal(10, 2)
+  date       DateTime       @default(now())
+  note       String?
+  type       SettlementType
+
+  group    Group @relation(fields: [groupId], references: [id])
+  fromUser User  @relation("FromUser", fields: [fromUserId], references: [id])
+  toUser   User  @relation("ToUser", fields: [toUserId], references: [id])
+}
+
+enum SettlementType {
+  MARK_CLEARED
+  PAYMENT_RECORD
 }
