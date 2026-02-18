@@ -23,8 +23,8 @@ export async function GET(req: NextRequest) {
     }),
   ])
 
-  // 汇总所有账单的参与记录
-  const allParticipants = bills.flatMap((b) =>
+  // 按账单分组传入，避免多张账单平铺导致比例计算错误
+  const billParticipantGroups = bills.map((b) =>
     b.participants.map((p) => ({
       userId: p.userId,
       paidAmount: p.paidAmount.toString(),
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 
   const balanceMap = calculatePairBalance({
     userId: session.userId,
-    participants: allParticipants,
+    bills: billParticipantGroups,
     settlements: settlementRecords,
   })
 

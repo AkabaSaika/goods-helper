@@ -12,21 +12,24 @@ interface SettlementRecord {
 
 interface BalanceInput {
   userId: string
-  participants: Participant[]
+  bills: Participant[][]
   settlements: SettlementRecord[]
 }
 
 /**
  * 计算 userId 与其他每个人的净余额
  * 正数：对方欠 userId；负数：userId 欠对方
+ *
+ * bills 是每张账单的参与人数组（按账单分组），不能将多张账单的参与人合并
+ * 为一个平铺数组，否则会导致比例计算错误。
  */
-export function calculatePairBalance({ userId, participants, settlements }: BalanceInput): Map<string, number> {
-  // 净余额 map：key = 对方userId, value = 对方欠我的金额
+export function calculatePairBalance({ userId, bills, settlements }: BalanceInput): Map<string, number> {
   const balanceMap = new Map<string, number>()
 
-  // 自己的支付和应付
-  const me = participants.find((p) => p.userId === userId)
-  if (me) {
+  for (const participants of bills) {
+    const me = participants.find((p) => p.userId === userId)
+    if (!me) continue
+
     const myPaid = parseFloat(me.paidAmount)
     const myShould = parseFloat(me.shouldPayAmount)
     const myExtra = myPaid - myShould // 我多付的金额，应由他人分摊
@@ -46,10 +49,10 @@ export function calculatePairBalance({ userId, participants, settlements }: Bala
   for (const s of settlements) {
     const amount = parseFloat(s.amount)
     if (s.fromUserId === userId) {
-      // 我还了对方
-      balanceMap.set(s.toUserId, (balanceMap.get(s.toUserId) ?? 0) - amount)
+      // 我还了对方：我的债务减少（余额增大）
+      balanceMap.set(s.toUserId, (balanceMap.get(s.toUserId) ?? 0) + amount)
     } else if (s.toUserId === userId) {
-      // 对方还了我
+      // 对方还了我：对方的债务减少
       balanceMap.set(s.fromUserId, (balanceMap.get(s.fromUserId) ?? 0) - amount)
     }
   }

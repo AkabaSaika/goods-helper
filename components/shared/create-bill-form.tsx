@@ -14,6 +14,13 @@ interface Member {
   username: string
 }
 
+interface GoodsEntry {
+  name: string
+  characterName: string
+  unitPrice: string
+  quantity: number
+}
+
 export function CreateBillForm({ groupId, members, currentUserId }: {
   groupId: string
   members: Member[]
@@ -30,6 +37,41 @@ export function CreateBillForm({ groupId, members, currentUserId }: {
   const [paidBy, setPaidBy] = useState(currentUserId)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [goods, setGoods] = useState<GoodsEntry[]>([
+    { name: '', characterName: '', unitPrice: '', quantity: 1 }
+  ])
+
+  const computedTotal = type === 'GOODS'
+    ? goods.reduce((sum, g) => sum + parseFloat(g.unitPrice || '0') * g.quantity, 0)
+    : parseFloat(totalAmount || '0')
+
+  function handleTypeChange(newType: 'AA' | 'ADVANCE' | 'GOODS') {
+    setType(newType)
+    if (newType !== 'GOODS') {
+      setGoods([{ name: '', characterName: '', unitPrice: '', quantity: 1 }])
+    }
+  }
+
+  function updateGoods(index: number, field: keyof GoodsEntry, value: string | number) {
+    setGoods((prev) => prev.map((g, i) => i === index ? { ...g, [field]: value } : g))
+  }
+
+  function addGoodsEntry() {
+    setGoods((prev) => [...prev, { name: '', characterName: '', unitPrice: '', quantity: 1 }])
+  }
+
+  function removeGoodsEntry(index: number) {
+    setGoods((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  function validateStep1(): boolean {
+    if (!title) return false
+    if (type === 'GOODS') {
+      if (goods.length === 0) return false
+      return goods.every((g) => g.name.trim() !== '' && parseFloat(g.unitPrice || '0') > 0)
+    }
+    return parseFloat(totalAmount || '0') > 0
+  }
 
   function toggleMember(id: string) {
     setSelectedMembers((prev) =>
@@ -41,7 +83,7 @@ export function CreateBillForm({ groupId, members, currentUserId }: {
     setError('')
     setLoading(true)
 
-    const amount = parseFloat(totalAmount)
+    const amount = computedTotal
     const perPerson = amount / selectedMembers.length
 
     const participants = selectedMembers.map((userId) => ({
@@ -59,6 +101,14 @@ export function CreateBillForm({ groupId, members, currentUserId }: {
           date: new Date(date).toISOString(),
           description: description || undefined,
           groupId, participants,
+          ...(type === 'GOODS' ? {
+            goods: goods.map((g) => ({
+              name: g.name,
+              characterName: g.characterName || undefined,
+              unitPrice: parseFloat(g.unitPrice),
+              quantity: g.quantity,
+            }))
+          } : {})
         }),
       })
       const data = await res.json()
@@ -84,7 +134,7 @@ export function CreateBillForm({ groupId, members, currentUserId }: {
                 <Button
                   key={t}
                   variant={type === t ? 'default' : 'outline'}
-                  onClick={() => setType(t)}
+                  onClick={() => handleTypeChange(t)}
                   className="flex-1"
                 >
                   {t === 'AA' ? 'AA 均摊' : t === 'ADVANCE' ? '垫付' : '周边拼单'}
@@ -96,10 +146,82 @@ export function CreateBillForm({ groupId, members, currentUserId }: {
             <Label>账单标题</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例：火锅聚餐" />
           </div>
-          <div className="space-y-2">
-            <Label>总金额（元）</Label>
-            <Input type="number" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} placeholder="0.00" />
-          </div>
+
+          {type !== 'GOODS' && (
+            <div className="space-y-2">
+              <Label>总金额（元）</Label>
+              <Input type="number" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} placeholder="0.00" />
+            </div>
+          )}
+
+          {type === 'GOODS' && (
+            <div className="space-y-3">
+              <Label>商品条目</Label>
+              {goods.map((g, i) => (
+                <Card key={i} className="border border-slate-200">
+                  <CardContent className="p-3 space-y-2">
+                    <div className="flex gap-2">
+                      <div className="flex-1 space-y-1">
+                        <Label className="text-xs text-slate-500">商品名 *</Label>
+                        <Input
+                          value={g.name}
+                          onChange={(e) => updateGoods(i, 'name', e.target.value)}
+                          placeholder="例：帆布包"
+                        />
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <Label className="text-xs text-slate-500">角色名</Label>
+                        <Input
+                          value={g.characterName}
+                          onChange={(e) => updateGoods(i, 'characterName', e.target.value)}
+                          placeholder="可选"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 items-end">
+                      <div className="flex-1 space-y-1">
+                        <Label className="text-xs text-slate-500">单价（元）*</Label>
+                        <Input
+                          type="number"
+                          value={g.unitPrice}
+                          onChange={(e) => updateGoods(i, 'unitPrice', e.target.value)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="w-24 space-y-1">
+                        <Label className="text-xs text-slate-500">数量 *</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={g.quantity}
+                          onChange={(e) => updateGoods(i, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
+                        />
+                      </div>
+                      {goods.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeGoodsEntry(i)}
+                          className="text-red-500 hover:text-red-700 px-2"
+                        >
+                          ×
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+              <Button variant="outline" onClick={addGoodsEntry} className="w-full">
+                + 添加商品
+              </Button>
+              <Card className="bg-slate-50">
+                <CardContent className="p-3 text-sm text-slate-600">
+                  合计金额：<strong>¥{computedTotal.toFixed(2)}</strong>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label>日期</Label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -108,7 +230,7 @@ export function CreateBillForm({ groupId, members, currentUserId }: {
             <Label>备注（可选）</Label>
             <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="可以不填" />
           </div>
-          <Button className="w-full" onClick={() => setStep(2)} disabled={!title || !totalAmount}>
+          <Button className="w-full" onClick={() => setStep(2)} disabled={!validateStep1()}>
             下一步
           </Button>
         </div>
@@ -149,7 +271,7 @@ export function CreateBillForm({ groupId, members, currentUserId }: {
           {selectedMembers.length > 0 && (
             <Card className="bg-slate-50">
               <CardContent className="p-3 text-sm text-slate-600">
-                每人应付：<strong>¥{(parseFloat(totalAmount || '0') / selectedMembers.length).toFixed(2)}</strong>
+                每人应付：<strong>¥{(computedTotal / selectedMembers.length).toFixed(2)}</strong>
               </CardContent>
             </Card>
           )}

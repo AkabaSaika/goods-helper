@@ -40,10 +40,12 @@ export default async function DashboardPage() {
     }),
   ])
 
-  const allParticipants = (await prisma.bill.findMany({
+  const allBillsForBalance = await prisma.bill.findMany({
     where: { groupId: firstGroup.id },
     include: { participants: true },
-  })).flatMap((b) => b.participants.map((p) => ({
+  })
+
+  const billParticipantGroups = allBillsForBalance.map((b) => b.participants.map((p) => ({
     userId: p.userId,
     paidAmount: p.paidAmount.toString(),
     shouldPayAmount: p.shouldPayAmount.toString(),
@@ -51,7 +53,7 @@ export default async function DashboardPage() {
 
   const balanceMap = calculatePairBalance({
     userId: session.userId,
-    participants: allParticipants,
+    bills: billParticipantGroups,
     settlements: settlements.map((s) => ({
       fromUserId: s.fromUserId,
       toUserId: s.toUserId,

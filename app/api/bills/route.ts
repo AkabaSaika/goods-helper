@@ -9,6 +9,13 @@ const participantSchema = z.object({
   shouldPayAmount: z.number().min(0),
 })
 
+const goodsItemSchema = z.object({
+  name: z.string().min(1),
+  characterName: z.string().optional(),
+  unitPrice: z.number().positive(),
+  quantity: z.number().int().min(1),
+})
+
 const createBillSchema = z.object({
   title: z.string().min(1).max(100),
   type: z.enum(['AA', 'ADVANCE', 'GOODS']),
@@ -17,6 +24,7 @@ const createBillSchema = z.object({
   description: z.string().max(500).optional(),
   groupId: z.string(),
   participants: z.array(participantSchema).min(1),
+  goods: z.array(goodsItemSchema).optional(),
 })
 
 // GET /api/bills?groupId=xxx&type=AA&page=1
@@ -60,19 +68,35 @@ export async function POST(req: NextRequest) {
   const parsed = createBillSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: '参数错误', details: parsed.error.flatten() }, { status: 400 })
 
-  const { participants, ...billData } = parsed.data
+  const { participants, goods, ...billData } = parsed.data
 
-  const bill = await prisma.bill.create({
-    data: {
-      ...billData,
-      totalAmount: billData.totalAmount,
-      date: new Date(billData.date),
-      createdById: session.userId,
-      participants: {
-        create: participants,
+  const bill = await prisma.$transaction(async (tx) => {
+    const createdBill = await tx.bill.create({
+      data: {
+        ...billData,
+        totalAmount: billData.totalAmount,
+        date: new Date(billData.date),
+        createdById: session.userId,
+        participants: {
+          create: participants,
+        },
       },
-    },
-    include: { participants: true },
+      include: { participants: true },
+    })
+
+    if (billData.type === 'GOODS' && goods?.length) {
+      await tx.goodsItem.createMany({
+        data: goods.map((g) => ({
+          billId: createdBill.id,
+          name: g.name,
+          characterName: g.characterName ?? null,
+          unitPrice: g.unitPrice,
+          quantity: g.quantity,
+        })),
+      })
+    }
+
+    return createdBill
   })
 
   return NextResponse.json({ bill }, { status: 201 })
