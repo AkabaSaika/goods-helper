@@ -84,13 +84,24 @@ export function CreateBillForm({ groupId, members, currentUserId }: {
     setLoading(true)
 
     const amount = computedTotal
-    const perPerson = amount / selectedMembers.length
 
-    const participants = selectedMembers.map((userId) => ({
-      userId,
-      paidAmount: userId === paidBy ? amount : 0,
-      shouldPayAmount: perPerson,
-    }))
+    let participants
+    if (type === 'ADVANCE') {
+      const others = selectedMembers.filter((id) => id !== paidBy)
+      const perOther = others.length > 0 ? amount / others.length : amount
+      participants = selectedMembers.map((userId) => ({
+        userId,
+        paidAmount: userId === paidBy ? amount : 0,
+        shouldPayAmount: userId === paidBy ? 0 : perOther,
+      }))
+    } else {
+      const perPerson = amount / selectedMembers.length
+      participants = selectedMembers.map((userId) => ({
+        userId,
+        paidAmount: userId === paidBy ? amount : 0,
+        shouldPayAmount: perPerson,
+      }))
+    }
 
     try {
       const res = await fetch('/api/bills', {
@@ -269,9 +280,15 @@ export function CreateBillForm({ groupId, members, currentUserId }: {
           </div>
 
           {selectedMembers.length > 0 && (
-            <Card className="bg-slate-50">
-              <CardContent className="p-3 text-sm text-slate-600">
-                每人应付：<strong>¥{(computedTotal / selectedMembers.length).toFixed(2)}</strong>
+            <Card className="bg-muted">
+              <CardContent className="p-3 text-sm text-muted-foreground">
+                {type === 'ADVANCE' ? (
+                  selectedMembers.length > 1
+                    ? <>付款人不分摊，被垫付人每人应付：<strong className="text-foreground">¥{(computedTotal / (selectedMembers.length - 1)).toFixed(2)}</strong></>
+                    : <>请至少添加一位被垫付人</>
+                ) : (
+                  <>每人应付：<strong className="text-foreground">¥{(computedTotal / selectedMembers.length).toFixed(2)}</strong></>
+                )}
               </CardContent>
             </Card>
           )}
