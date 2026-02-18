@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     settlements: settlementRecords,
   })
 
-  // 计算每对用户之间各账单的明细贡献
+  // 计算每对用户之间各账单的明细贡献（结算前的毛金额）
   const pairDetails = new Map<string, Array<{
     billId: string
     title: string
@@ -88,11 +88,51 @@ export async function GET(req: NextRequest) {
 
   const balances = members
     .filter((m) => m.userId !== session.userId)
-    .map((m) => ({
-      user: m.user,
-      netAmount: balanceMap.get(m.userId) ?? 0,
-      details: pairDetails.get(m.userId) ?? [],
-    }))
+    .map((m) => {
+      const rawDetails = pairDetails.get(m.userId) ?? []
+
+      // 计算与该用户之间的净结算额
+      // 正数 = 对方已还我，负数 = 我已还对方
+      let netSettlement = settlements.reduce((sum, s) => {
+        if (s.fromUserId === m.userId && s.toUserId === session.userId) return sum + Number(s.amount)
+        if (s.fromUserId === session.userId && s.toUserId === m.userId) return sum - Number(s.amount)
+        return sum
+      }, 0)
+
+      // FIFO：按日期从旧到新将结算额逐笔抵扣，过滤掉已结清的账单
+      const sorted = [...rawDetails].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      )
+
+      const outstanding: typeof rawDetails = []
+      for (const d of sorted) {
+        const sameSign =
+          (netSettlement > 0 && d.amount > 0) || (netSettlement < 0 && d.amount < 0)
+
+        if (!sameSign || Math.abs(netSettlement) < 0.005) {
+          outstanding.push(d)
+          continue
+        }
+
+        const absNet = Math.abs(netSettlement)
+        const absAmt = Math.abs(d.amount)
+        if (absNet >= absAmt) {
+          // 该笔账单已被结算全覆盖，跳过
+          netSettlement -= Math.sign(netSettlement) * absAmt
+        } else {
+          // 部分结算，显示剩余未结清金额
+          outstanding.push({ ...d, amount: Math.sign(d.amount) * (absAmt - absNet) })
+          netSettlement = 0
+        }
+      }
+
+      return {
+        user: m.user,
+        netAmount: balanceMap.get(m.userId) ?? 0,
+        details: outstanding.reverse(), // 最新的在前
+      }
+    })
+    .filter((b) => Math.abs(b.netAmount) > 0.005) // 过滤掉浮点误差导致的"零余额"
 
   return NextResponse.json({ balances })
 }
