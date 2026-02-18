@@ -8,6 +8,7 @@ const JWT_SECRET = new TextEncoder().encode(
 export interface JWTPayload {
   userId: string
   username: string
+  [key: string]: unknown
 }
 
 export async function signToken(payload: JWTPayload): Promise<string> {

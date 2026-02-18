@@ -102,11 +102,11 @@ export default function StatsPage() {
                       cx="50%"
                       cy="50%"
                       outerRadius={70}
-                      label={({ name, percent }: { name: string; percent: number }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      label={({ name, percent }: { name?: string; percent?: number }) => `${name ?? ''} ${((percent ?? 0) * 100).toFixed(0)}%`}
                     >
                       {stats.byType.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                    <Tooltip formatter={(v: number | undefined) => formatCurrency(Number(v ?? 0))} />
                   </PieChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -121,7 +121,7 @@ export default function StatsPage() {
                   <BarChart data={stats.byCharacter.slice(0, 8)}>
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                    <Tooltip formatter={(v: number | undefined) => formatCurrency(Number(v ?? 0))} />
                     <Bar dataKey="value" fill="#a855f7" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>

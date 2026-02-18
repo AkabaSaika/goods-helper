@@ -87,7 +87,7 @@ export default async function DashboardPage() {
           <p className="text-slate-400 text-sm">还没有账单</p>
         ) : (
           <div className="space-y-3">
-            {bills.map((bill) => <BillCard key={bill.id} bill={bill} />)}
+            {bills.map((bill) => <BillCard key={bill.id} bill={{ ...bill, totalAmount: Number(bill.totalAmount), date: bill.date.toISOString() }} />)}
           </div>
         )}
       </div>
